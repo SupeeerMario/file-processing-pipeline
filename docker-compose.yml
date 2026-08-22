@@ -1,0 +1,60 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - mongodb_network
+
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - 'mongodb://localhost:27017/admin'
+        - '--eval=db.runCommand({ping:1})'
+      retries: 3
+      timeout: 5s
+      interval: 1m
+    volumes:
+      - mongodb_data:/data/db
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    ports:
+      - 8081:8081
+
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://${DB_USERNAME}:${DB_PASSWORD}@mongodb:27017/
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - mongodb_network
+
+  web:
+    build: .
+    ports:
+      - 3000:3000
+    environment:
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - MONGODB_URI=${MONGODB_URI}
+      - DB_HOST=mongodb
+      - DB_PORT=27017
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      -  /app/node_modules
+
+networks:
+  mongodb_network:
+
+volumes:
+  mongodb_data:
+
