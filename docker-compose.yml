@@ -16,7 +16,7 @@ services:
         - '--eval=db.runCommand({ping:1})'
       retries: 3
       timeout: 5s
-      interval: 1m
+      interval: 5s
     volumes:
       - mongodb_data:/data/db
 
@@ -27,7 +27,7 @@ services:
       - 8081:8081
 
     environment:
-      ME_CONFIG_MONGODB_URL: mongodb://${DB_USERNAME}:${DB_PASSWORD}@mongodb:27017/
+      ME_CONFIG_MONGODB_URL: mongodb://${DB_USERNAME}:${DB_PASSWORD}@mongodb:27017/files?authSource=admin
       ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
     depends_on:
       mongodb:
@@ -48,6 +48,8 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+    networks:
+      - mongodb_network
     volumes:
       - .:/app
       -  /app/node_modules

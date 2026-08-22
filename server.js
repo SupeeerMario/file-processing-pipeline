@@ -6,10 +6,8 @@ const app = express();
 const port = process.env.SERVER_PORT;
 
 
-
-
-app.listen(port, '0.0.0.0' , ()=>{
+connectDB().then(()=> app.listen(port, '0.0.0.0' , ()=>{
     console.log(`Server is running on port ${port}`)
-});
 
-connectDB()
+}));
+
