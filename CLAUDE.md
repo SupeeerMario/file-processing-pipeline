@@ -114,6 +114,12 @@ Write the answers down in `docs/decisions.md` before writing more code.
 - [ ] Decide the natural key that makes an upsert idempotent (e.g. `email`, or
       `{ importId, rowNumber }`). Write down which and why, and create the **unique index**
       for it. Say what happens to a legitimate duplicate email within one file.
+      Keep it in its own field, not in `_id`: mongo-express calls
+      `ObjectId.createFromHexString` on every `_id` in a URL and the process **dies** on a
+      non-ObjectId - `BSONTypeError: Argument passed in must be a single String of 12 bytes
+      or a string of 24 hex characters`, unhandled in an Express param callback. Confirmed
+      2026-08-24 with integer `_id`s. Default ObjectId `_id` + unique index on the natural
+      key costs nothing and keeps the admin UI usable.
 - [ ] Decide chunk size (start at 1000 rows) and write down what it trades off
       (memory - transaction size - restart granularity - round trips).
 - [ ] Test runner: `jest` or `node:test`.
@@ -133,16 +139,44 @@ Write the answers down in `docs/decisions.md` before writing more code.
 - [x] `Dockerfile` copies the lockfile and uses `npm ci`.
 - [x] `.dockerignore` covers `node_modules/`, `.env`, `.git`; `.gitignore` no longer lists
       itself.
+- [x] Mongo runs as **single-node replica set `rs0`** - `mongod --replSet rs0 --keyFile
+      /etc/mongo-keyfile` in exec form. `rs.status()` shows one member `mongodb:27017`,
+      `stateStr: "PRIMARY"`. A probe transaction committed: 0 docs visible outside the
+      session before `commitTransaction()`, 2 after. Phase 3b is unblocked.
+- [x] Keyfile auth (Path A) rather than dropping auth locally (Path B) - `--replSet` plus
+      authorization makes mongod demand a keyfile even with one member. Path B would have
+      made local diverge from Atlas, so auth bugs would first appear in prod.
+      `mongo-keyfile`: `openssl rand -base64 756`, mode `400`, owned uid/gid `999` (the
+      `mongodb` user inside `mongo:7.0`; the host renders `999` as `dnsmasq:systemd-journal`
+      - same number, different name table). Bind-mounted `:ro`, gitignored.
+- [x] Healthcheck asserts **readiness, not liveness**: `db.hello().isWritablePrimary ||
+      quit(1)`. `ping` answers `1` on an uninitiated replica set, so `web` would start with
+      no primary and `connectDB` would die after the 30s server-selection timeout. mongosh
+      signals health by exit code and returning `false` is not throwing - hence the explicit
+      `quit(1)`. Exec-form `CMD` does no shell parsing, so `--eval=<expr>` must be one argv
+      element with no spaces around the `=`.
+- [x] `MONGODB_URI` carries `&replicaSet=rs0`. Without it the driver treats the server as
+      standalone and `startTransaction()` fails even though the server supports it.
+- [x] `ME_CONFIG_MONGODB_URL` uses `${DB_USERNAME}` / `${DB_PASSWORD}` - Compose does
+      interpolate its own file. No credentials in a tracked file.
 
 **Infrastructure - remaining:**
 - [ ] Add RabbitMQ and storage (MinIO) to Compose. Add a `worker` service.
-- [ ] Convert mongo to a **single-node replica set** (`--replSet rs0` + one-time
-      `rs.initiate()`), otherwise Phase 3b cannot be built. Do it while the `files` database
-      is still empty - retrofitting it later means wiping the volume.
-- [ ] `docker-compose.yml` currently hardcodes the Mongo username and password in
-      `ME_CONFIG_MONGODB_URL`, and that file is tracked by git. Move it back to
-      `${DB_USERNAME}` / `${DB_PASSWORD}` - Compose does interpolate its own file, so this
-      works. Rotate the password if it has already been pushed.
+- [ ] `rs.initiate()` is **manual and untracked** - it lives in the `mongodb_data` volume,
+      not in any file. `docker compose down -v` wipes it and Mongo comes back permanently
+      `unhealthy` (`Did not find local replica set configuration document at startup`),
+      which blocks every `depends_on: service_healthy`. Re-run it with an explicit
+      `host: "mongodb:27017"`; bare `rs.initiate()` registers the container ID, which `web`
+      cannot resolve. Same for `mongo-keyfile` on a fresh clone - it is gitignored and must
+      be regenerated. Put both in the README, or script them.
+- [ ] `mongo-express` basic auth is on with the image's **default `admin` / `pass`** - never
+      configured, inherited. Harmless bound to localhost, not harmless anywhere else, since
+      `ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"` exposes `admin` and `local` too. Set
+      `ME_CONFIG_BASICAUTH_USERNAME` / `_PASSWORD` explicitly, or turn it off deliberately.
+- [ ] No `restart:` policy on any service - mongo-express stayed dead after it crashed.
+      `unless-stopped` is right for the UI and the API. Decide it separately for the Phase 3d
+      worker: a restart policy fights a graceful-shutdown test by restarting a worker you
+      stopped on purpose.
 - [ ] Repo scaffolding: `api/`, `worker/`, `models/`, `lib/` (storage, queue, parser),
       `scripts/`, `tests/`, `README.md`.
 - [ ] Local Node is `.venv`-managed v26.7.0, the image is 22. Pin the intent (`.nvmrc`,
@@ -155,9 +189,11 @@ Write the answers down in `docs/decisions.md` before writing more code.
 storage, `docker compose exec mongodb mongosh` connects, and the RabbitMQ management UI
 opens.
 
-Current state: API + MongoDB + mongo-express come up clean - `MongoDB Connected: mongodb`
-then `Server is running on port 3000`, in that order. `GET /` returns 404 (no routes yet).
-Queue, storage, worker, and the replica set are not built.
+Current state (2026-08-24): API + MongoDB + mongo-express come up clean - `MongoDB
+Connected: mongodb` then `Server is running on port 3000`, in that order. Mongo is
+`healthy` as PRIMARY of `rs0` and multi-document transactions are verified working.
+`GET /` returns 404 (no routes yet). Queue, storage, and worker are not built - they are
+what stands between here and Phase 0's "Done when".
 
 ---
 
