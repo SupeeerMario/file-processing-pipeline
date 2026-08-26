@@ -11,3 +11,8 @@ connectDB().then(()=> app.listen(port, '0.0.0.0' , ()=>{
 
 }));
 
+
+
+app.get('/health', (req,res) =>{
+    res.status(200).json({status: "healthy", timestamp: new Date()});
+});
