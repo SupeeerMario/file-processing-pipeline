@@ -15,9 +15,9 @@ services:
         - mongosh
         - 'mongodb://localhost:27017/admin'
         - '--eval=db.hello().isWritablePrimary || quit(1)'
+      interval: 5s
       retries: 3
       timeout: 5s
-      interval: 5s
     volumes:
       - mongodb_data:/data/db
       - ./mongo-keyfile:/etc/mongo-keyfile:ro
@@ -50,14 +50,38 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://0.0.0.0:3000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
     networks:
       - mongodb_network
     volumes:
       - .:/app
       -  /app/node_modules
 
+  redis:
+    image: redis:8.8.2
+    container_name: message_broker
+    command: redis-server --appendonly yes 
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    networks:
+      - mongodb_network
+    volumes:
+      - redis_broker_data:/data
+
+
 networks:
   mongodb_network:
 
 volumes:
   mongodb_data:
+  redis_broker_data:
