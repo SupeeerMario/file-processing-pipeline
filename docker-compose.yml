@@ -96,6 +96,27 @@ services:
       - mongodb_network
     volumes:
       - minio_data:/data
+  
+  worker:
+    build: .
+    environment:
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - MONGODB_URI=${MONGODB_URI}
+      - DB_HOST=mongodb
+      - DB_PORT=27017
+    entrypoint: ["node"]
+    command: ["./worker.js"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - mongodb_network
+    volumes:
+      - .:/app
+      -  /app/node_modules
 
 networks:
   mongodb_network:
