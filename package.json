@@ -20,6 +20,8 @@
   },
   "homepage": "https://github.com/SupeeerMario/file-processing-pipeline#readme",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1120.0",
+    "@aws-sdk/lib-storage": "^3.1120.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "ioredis": "^6.0.0",
