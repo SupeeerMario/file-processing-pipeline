@@ -1,10 +1,10 @@
 const connectDB = require("./connectDB");
-const ensuregroup = require("./queue");
+const queue = require("./queue");
 
 
 async function main() {
 await connectDB()
-await ensuregroup()
+await queue.ensuregroup()
 
 
 }

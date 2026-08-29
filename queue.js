@@ -24,4 +24,19 @@ async function ensuregroup(id = '$') {
 
 }
 
-module.exports = ensuregroup
+async function publish(jobId){
+
+    const messegeId = await redis.xadd(
+        stream,
+        'MAXLEN',
+        '1000',
+        '*',
+        'jobId',
+        jobId
+    );
+    
+    console.log(`Published job ${jobId} with messege id ${messegeId}`)
+}
+
+
+module.exports = {ensuregroup, publish}
