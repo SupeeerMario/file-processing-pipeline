@@ -38,15 +38,15 @@ async function ensureBucket(){
     }
 };
 
-async function put(key, stream){
+function put(key, stream){
 
     const uploader = new awsSdk_Lib.Upload({
         client: s3Client,
         params: {Bucket: BucketName, Key: key, Body: stream}
     });
 
-    await uploader.done()
-
+    const upload = uploader.done();
+    return ({upload: upload, abort: ()=>{uploader.abort()}})
 }
 
 async function get(key){
