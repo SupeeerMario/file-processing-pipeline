@@ -31,7 +31,7 @@ app.get('/health', (req,res) =>{
 async function receiveUpload(req,jobId){
     
     return new Promise((resolve, reject) =>{
-        const bb = busboy({ headers: req.headers, limits: {fileSize: 1024 * 1024 * 20}});
+        const bb = busboy({ headers: req.headers, limits: {fileSize: 1024 * 1024 * 50}});
         let uploading = null;
         let originalName = '';
         let key = '';
