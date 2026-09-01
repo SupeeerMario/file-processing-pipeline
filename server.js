@@ -31,7 +31,7 @@ app.get('/health', (req,res) =>{
 async function receiveUpload(req,jobId){
     
     return new Promise((resolve, reject) =>{
-        const bb = busboy({ headers: req.headers});
+        const bb = busboy({ headers: req.headers, limits: {fileSize: 1024 * 1024 * 20}});
         let uploading = null;
         let originalName = '';
         let key = '';
@@ -63,6 +63,14 @@ async function receiveUpload(req,jobId){
 
             uploading = storage.put(key, file);
 
+            file.on('limit', (error)=>{
+                const err = new Error(`File is bigger than the cap`);
+                err.status = 413;
+                uploading.upload.catch(() => {})
+                uploading.abort()
+                reject(err)
+            })
+            
             file.on('error', (error)=>{
                 reject(new Error(`File upload stream error : ${error.message}`));
             });
@@ -70,7 +78,7 @@ async function receiveUpload(req,jobId){
 
         bb.on('close', ()=>{
             if(uploading !== null){
-                uploading.then(() => resolve({filename: originalName, key: key}), reject)
+                uploading.upload.then(() => resolve({filename: originalName, key: key}), reject)
             }else{
                 reject(new Error("No file provided"));
             }
@@ -108,8 +116,12 @@ app.use((err,req,res,next) =>{
     }
     
     if (err.status === 400){
-    console.error('error:', err);
-    res.status(err.status).json({error: err.message});
+        console.error('error:', err);
+        res.status(err.status).json({error: err.message});
+    
+    }else if(err.status === 413){
+        console.error('error:', err);
+        res.status(err.status).json({error: err.message});
 
     }else{
 
