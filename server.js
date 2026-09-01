@@ -106,28 +106,56 @@ app.post('/upload', async (req,res)=>{
 });
 
 
+app.get('/file/:id', async (req,res)=>{
+    const fileId = req.params.id;
+
+        const file = await Job.findById(fileId);
+        
+        if(file === null){
+            res.status(404).json({error: 'File is not found'});
+            return
+        }
+        
+        const res_object = ({filename: file.filename, 
+                            status: file.status, 
+                            totalRows: file.totalRows,
+                            rowsOk: file.rowsOk,
+                            rowsFailed: file.rowsFailed,
+                            attempts: file.attempts,
+                            error: file.error
+                            });
+
+        res.json(res_object)
+        
+   
+});
 
 
 
 app.use((err,req,res,next) =>{
-    
-    if (!err.status){
+
+    if(err.name === 'CastError'){
+        err.status = 400;
+        console.log('error', err);
+        err.message = "Invalid file id";
+        res.status(err.status).json({error: err.message});
+        return
+    }
+
+    if(!err.status){
         err.status = 500;
     }
     
-    if (err.status === 400){
-        console.error('error:', err);
-        res.status(err.status).json({error: err.message});
-    
-    }else if(err.status === 413){
-        console.error('error:', err);
+    if(err.status < 500){
+
+        console.log('error:', err);
         res.status(err.status).json({error: err.message});
 
     }else{
-
-    console.error('error:', err);
-    err.message = 'Server error';
-    res.status(err.status).json({error: err.message});
+        
+        console.log('error:', err);
+        err.message = 'Server error';
+        res.status(err.status).json({error: err.message});
     }
 
 
