@@ -35,14 +35,20 @@ async function receiveUpload(req,jobId){
         let uploading = null;
         let originalName = '';
         let key = '';
+
+
         bb.on('file', (name, file, info)=>{
             const { filename, encoding, mimeType} = info;
             
             const file_ext = info.filename.split('.').pop().toLowerCase();
             const allowed_ext = ['csv', 'xlsx']
             if(!allowed_ext.includes(file_ext)){
+
+                const err = new Error(`Wrong file format`);
+                err.status = 400;
+                          
                 file.resume()
-                reject(new Error('Wrong file format'))
+                reject(err)
                 return
             }
 
@@ -90,3 +96,27 @@ app.post('/upload', async (req,res)=>{
 
     res.status(202).json({jobId});
 });
+
+
+
+
+
+app.use((err,req,res,next) =>{
+    
+    if (!err.status){
+        err.status = 500;
+    }
+    
+    if (err.status === 400){
+    console.error('error:', err);
+    res.status(err.status).json({error: err.message});
+
+    }else{
+
+    console.error('error:', err);
+    err.message = 'Server error';
+    res.status(err.status).json({error: err.message});
+    }
+
+
+})
