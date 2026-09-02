@@ -105,6 +105,7 @@ services:
       - MONGODB_URI=${MONGODB_URI}
       - DB_HOST=mongodb
       - DB_PORT=27017
+      - CONSUMER_NAME=${CONSUMER_NAME}
     entrypoint: ["node"]
     command: ["./worker.js"]
     depends_on:

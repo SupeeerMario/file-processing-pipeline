@@ -39,4 +39,37 @@ async function publish(jobId){
 }
 
 
-module.exports = {ensuregroup, publish}
+
+async function consume(from = '>'){
+    
+    const result = await redis.xreadgroup('GROUP', group, process.env.CONSUMER_NAME, 'COUNT', 1, 'BLOCK', 5000, 'STREAMS', stream, from)
+    console.log(JSON.stringify(result))
+
+    if(result === null){
+        console.log('No new work')
+        return
+    }
+
+
+    const entries = result[0][1];
+    
+    if(entries.length === 0){
+        console.log('No entries to delete');
+        return
+    }
+
+    const entryId = entries[0][0];
+    const job = entries[0][1];
+    const jobId = job[1]
+
+    return {entryId, jobId}
+}
+
+
+async function ack(entryId){
+    const res = await redis.xack(stream, group, entryId);
+    console.log(res)
+    return res
+}
+
+module.exports = {ensuregroup, publish, consume, ack}
