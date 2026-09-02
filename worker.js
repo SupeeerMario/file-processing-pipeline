@@ -57,11 +57,29 @@ async function processJob(job, recovered = false){
     const parser = parse({columns: true,})
 
     s.pipe(parser)
-        
+    
+    let chunk = [];
+    let chunk_count = 0;
+    const chunk_size = 1000;
+
     for await (const row of parser){ 
         bytes++
         if(bytes % 10000 === 0) console.log(bytes, process.memoryUsage().rss)
+        
+        chunk.push(row)
+        if(chunk.length === chunk_size){
+            chunk_count++
+            console.log(`chunk_count: ${chunk_count}`)
+            console.log(`chunk.length: ${chunk.length}`)
+            chunk = []
+        }
+    }
 
+    if(chunk.length > 0){
+        chunk_count++
+        console.log(`chunk_count: ${chunk_count}`)
+        console.log(`chunk.length: ${chunk.length}`)
+        chunk = []
     }
 
     console.log(bytes)
