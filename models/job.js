@@ -39,6 +39,17 @@ JobSchema.statics.transition = async function (jobId, nextStatus) {
 };
 
 
+JobSchema.statics.processing = async function(jobId){
+    const updated_job = await this.updateOne(
+        {_id: jobId, status: { $in: ['pending', 'processing']}},
+        {$set: {status: 'processing'}}
+    )
+    const count = updated_job.matchedCount
+    
+    return count
+}
+
+
 const Job = mongoose.model('Job', JobSchema);
 
 module.exports = Job
