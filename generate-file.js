@@ -15,17 +15,15 @@ if (!Number.isInteger(rows) || rows < 1 || !outPath) {
 }
  
 
-const HEADER = 'customer_id,name,email,signup_date,country,credit_limit\n';
+const HEADER = 'customer_id,name,email,country\n';
 const COUNTRIES = ['US', 'CA', 'EG', 'GE', 'FR', 'JP'];
-const EPOCH = Date.UTC(2024, 0, 1);
-const DAY = 86400000;
+
 
 
 const DEFECTS = {
     7: 'comma',
     23: 'email',
     44: 'date',
-    58: 'credit_limit',
     71: 'duplicate_id',
     35: 'missing_name',
     62: 'missing_id'
@@ -37,9 +35,7 @@ function buildRow(i) {
     let customer_id = i;
     let name = `User ${i}`;
     let email = `user${i}@example.com`;
-    let date = new Date(EPOCH + i * DAY).toISOString().slice(0, 10);
     let country = COUNTRIES[i % COUNTRIES.length];
-    let creditLimit = ((i % 50) * 100 + 500).toFixed(2);
 
     if (broken && DEFECTS[i]) {
         switch (DEFECTS[i]) {
@@ -51,9 +47,6 @@ function buildRow(i) {
                 break;
             case 'date':
                 date = '2024-13-45'; 
-                break;
-            case 'credit_limit':
-                creditLimit = 'N/A'; 
                 break;
             case 'duplicate_id':
                 customer_id = i - 1; 
@@ -67,7 +60,7 @@ function buildRow(i) {
       }
     }
  
-  return [customer_id, name, email, date, country, creditLimit].join(',') + '\n';
+  return [customer_id, name, email, country].join(',') + '\n';
 }
 
 
