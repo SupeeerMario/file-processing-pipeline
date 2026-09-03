@@ -1,6 +1,7 @@
 const connectDB = require("./connectDB");
 const queue = require("./queue");
 const Job = require("./models/job");
+const Content = require("./models/content");
 const storage = require("./storage");
 let running = true;
 let recovered = true; // to prevent double claiming a row
@@ -8,6 +9,7 @@ const { parse } = require('csv-parse')
 
 async function main() {
     await connectDB()
+    await Content.syncIndexes()
     await queue.ensuregroup()
     const pending = await queue.consume('0');
     if(pending){
