@@ -37,8 +37,32 @@ async function main() {
 }
 
 
+async function flushMapToBulkWrite(rows){
+
+    const operations = rows.map(d =>({
+        updateOne: {
+            filter: {customer_id: d.customer_id},
+            update: {
+                $set: d
+            },
+            upsert: true
+        }
+    }))
+    try{
+        
+        return await Content.bulkWrite(operations, {ordered: false})
+    }catch(err){
+    
+        return {upserted: err.result.upsertedCount, failed: err.writeErrors.length}
+    }
+}
+
 async function processJob(job, recovered = false){
     let claimed = '';
+
+    let result_pass = [];
+    let result_fail = [];
+
     if(!recovered){
 
         claimed = await Job.transition(job.jobId, 'processing');
@@ -67,8 +91,8 @@ async function processJob(job, recovered = false){
     s.pipe(parser)
     
  
-    let result_pass = [];
-    let result_fail = [];
+
+
 
     for await (const row of parser){ 
         bytes++
@@ -80,11 +104,17 @@ async function processJob(job, recovered = false){
         
         if(result_pass.length === 1000){
             console.log(`result_pass: ${result_pass.length}`)
+
+                
+            await flushMapToBulkWrite(result_pass)
+
+
             result_pass = []
+            
         }
         
         if(result_fail.length === 1000){
-            console.log(`result_fail: ${result_fail.length}`)
+            console.log(`result_fail: ${result_fail.length}`) 
             result_fail = []
         }
 
@@ -100,6 +130,10 @@ async function processJob(job, recovered = false){
 
     if(result_pass.length > 0){
         console.log(`result_pass: ${result_pass.length}`)
+
+        await flushMapToBulkWrite(result_pass)
+
+
         result_pass = []
     }
     
