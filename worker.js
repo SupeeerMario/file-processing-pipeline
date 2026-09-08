@@ -2,6 +2,7 @@ const connectDB = require("./connectDB");
 const queue = require("./queue");
 const Job = require("./models/job");
 const Content = require("./models/content");
+const RowError = require("./models/error");
 const storage = require("./storage");
 let running = true;
 let recovered = true; // to prevent double claiming a row
@@ -11,6 +12,7 @@ const contentSchema = require("./models/zod");
 async function main() {
     await connectDB()
     await Content.syncIndexes()
+    await RowError.syncIndexes()
     await queue.ensuregroup()
     const pending = await queue.consume('0');
     if(pending){
@@ -37,7 +39,7 @@ async function main() {
 }
 
 
-async function flushMapToBulkWrite(rows){
+async function flushContent(rows){
 
     const operations = rows.map(d =>({
         updateOne: {
@@ -54,6 +56,16 @@ async function flushMapToBulkWrite(rows){
     }catch(err){
     
         return {upserted: err.result.upsertedCount, failed: err.writeErrors.length}
+    }
+}
+
+async function flushRowErrors(jobId, result_fail){
+    const docs = result_fail.map(e => ({ ...e, importId: jobId}))
+    try{
+    
+        return await RowError.insertMany(docs, {ordered: false})
+    }catch(err){
+        return {insertedCount: err.result.insertedCount, failed: err.writeErrors.length}
     }
 }
 
@@ -85,7 +97,7 @@ async function processJob(job, recovered = false){
     const parser = parse({columns: true, info: true, skip_records_with_error: true})
 
     parser.on('skip', (e)=>{
-        result_fail.push({row: e.lines, reason: e.code, raw: e.record})
+        result_fail.push({importId: job.jobId, row: e.lines, reason: e.code, raw: e.record})
     })
 
     s.pipe(parser)
@@ -106,7 +118,7 @@ async function processJob(job, recovered = false){
             console.log(`result_pass: ${result_pass.length}`)
 
                 
-            await flushMapToBulkWrite(result_pass)
+            await flushContent(result_pass)
 
 
             result_pass = []
@@ -115,6 +127,9 @@ async function processJob(job, recovered = false){
         
         if(result_fail.length === 1000){
             console.log(`result_fail: ${result_fail.length}`) 
+
+            await flushRowErrors(job.jobId, result_fail)
+        
             result_fail = []
         }
 
@@ -124,14 +139,14 @@ async function processJob(job, recovered = false){
             result_pass.push(result.data)
         }else{
             console.log(result.error.issues)
-            result_fail.push({row: row.info.lines, reason: result.error.issues.map(i => `${i.path}: ${i.message}`).join('; '), raw: row.record})
+            result_fail.push({importId: job.jobId, row: row.info.lines, reason: result.error.issues.map(i => `${i.path}: ${i.message}`).join('; '), raw: row.record})
         }
     }
 
     if(result_pass.length > 0){
         console.log(`result_pass: ${result_pass.length}`)
 
-        await flushMapToBulkWrite(result_pass)
+        await flushContent(result_pass)
 
 
         result_pass = []
@@ -139,6 +154,9 @@ async function processJob(job, recovered = false){
     
     if(result_fail.length > 0){
         console.log(`result_fail: ${result_fail.length}`)
+        
+        await flushRowErrors(job.jobId, result_fail)
+
         result_fail = []
     }
 
