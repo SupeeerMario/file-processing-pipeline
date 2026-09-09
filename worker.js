@@ -50,12 +50,22 @@ async function flushContent(rows){
             upsert: true
         }
     }))
+
     try{
         
-        return await Content.bulkWrite(operations, {ordered: false})
-    }catch(err){
+        const write = await Content.bulkWrite(operations, {ordered: false})
     
-        return {upserted: err.result.upsertedCount, failed: err.writeErrors.length}
+        const ok = write.upsertedCount + write.matchedCount
+        const failed = 0
+    
+        return {ok: ok, failed: failed}  
+    }catch(err){
+
+        const ok = err.result.upsertedCount + err.result.matchedCount
+        const failed = err.writeErrors.length
+        
+        return {ok: ok, failed: failed}  
+        
     }
 }
 
@@ -63,9 +73,17 @@ async function flushRowErrors(jobId, result_fail){
     const docs = result_fail.map(e => ({ ...e, importId: jobId}))
     try{
     
-        return await RowError.insertMany(docs, {ordered: false})
+        const inserted = await RowError.insertMany(docs, {ordered: false})
+
+        const ok = inserted.length
+        const failed = docs.length - inserted.length
+
+        return {ok: ok, failed: failed}
     }catch(err){
-        return {insertedCount: err.result.insertedCount, failed: err.writeErrors.length}
+        
+        const ok = err.result.insertedCount
+        const failed = err.writeErrors.length
+        return {ok: ok, failed: failed}
     }
 }
 
@@ -74,6 +92,10 @@ async function processJob(job, recovered = false){
 
     let result_pass = [];
     let result_fail = [];
+
+    let rowsOk = 0;
+    let rowsFailed = 0;
+    let totalRows = 0;
 
     if(!recovered){
 
@@ -92,11 +114,11 @@ async function processJob(job, recovered = false){
 
     const doc = await Job.findById(job.jobId);
     const s = await storage.get(doc.storageKey);
-    let bytes = 0;
 
     const parser = parse({columns: true, info: true, skip_records_with_error: true})
 
     parser.on('skip', (e)=>{
+        totalRows += 1
         result_fail.push({importId: job.jobId, row: e.lines, reason: e.code, raw: e.record})
     })
 
@@ -107,8 +129,8 @@ async function processJob(job, recovered = false){
 
 
     for await (const row of parser){ 
-        bytes++
-        if(bytes % 10000 === 0) console.log(bytes, process.memoryUsage().rss)
+        totalRows++
+        if(totalRows % 10000 === 0) console.log(totalRows, process.memoryUsage().rss)
         
         
         const result = contentSchema.safeParse(row.record)
@@ -117,9 +139,9 @@ async function processJob(job, recovered = false){
         if(result_pass.length === 1000){
             console.log(`result_pass: ${result_pass.length}`)
 
-                
-            await flushContent(result_pass)
-
+            
+            const flushedContent = await flushContent(result_pass)
+            rowsOk += flushedContent.ok
 
             result_pass = []
             
@@ -129,7 +151,9 @@ async function processJob(job, recovered = false){
             console.log(`result_fail: ${result_fail.length}`) 
 
             await flushRowErrors(job.jobId, result_fail)
-        
+            
+            rowsFailed += result_fail.length
+
             result_fail = []
         }
 
@@ -146,8 +170,9 @@ async function processJob(job, recovered = false){
     if(result_pass.length > 0){
         console.log(`result_pass: ${result_pass.length}`)
 
-        await flushContent(result_pass)
-
+        const flushedContent = await flushContent(result_pass)
+        
+        rowsOk += flushedContent.ok
 
         result_pass = []
     }
@@ -156,13 +181,15 @@ async function processJob(job, recovered = false){
         console.log(`result_fail: ${result_fail.length}`)
         
         await flushRowErrors(job.jobId, result_fail)
+        
+        rowsFailed += result_fail.length
 
         result_fail = []
     }
 
+    await Job.transition(job.jobId, 'done', {rowsOk, rowsFailed, totalRows})
 
-
-    console.log(bytes)
+    console.log(totalRows)
     await queue.ack(job.entryId) 
 }
 
