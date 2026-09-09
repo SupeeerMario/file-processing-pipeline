@@ -8,7 +8,9 @@ const port = process.env.SERVER_PORT;
 const busboy = require('busboy');
 const mongoose = require('mongoose');
 const Job = require('./models/job');
+const RowError = require('./models/error');
 const { publish } = require('./queue');
+const { stringify } = require('csv-stringify')
 
 connectDB().then(storage.ensureBucket).catch(err =>{
     console.log('error while creating bucket', err);
@@ -127,6 +129,33 @@ app.get('/file/:id', async (req,res)=>{
 
         res.json(res_object)
         
+   
+});
+
+
+app.get('/file/:id/errors.csv', async (req,res)=>{
+    const fileId = req.params.id;
+
+        const file = await Job.findById(fileId);
+        
+        if(file === null){
+            res.status(404).json({error: 'File is not found'});
+            return
+        }
+
+        const file_id = file.id;
+        
+
+
+        res.setHeader('Content-Type', 'text/csv')
+        res.setHeader('Content-Disposition', 'attachment; filename="errors.csv"')
+        
+        const row_errors = RowError.find({importId: file_id}).lean().cursor()
+
+        const stringifier = stringify({header: true, columns: ['row', 'reason', 'raw'], cast: {object: raw=>JSON.stringify(raw)}})
+
+        row_errors.pipe(stringifier).pipe(res) 
+
    
 });
 
