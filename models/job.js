@@ -22,7 +22,7 @@ const JobSchema = new mongoose.Schema({
 }, {timestamps: true});
 
 
-JobSchema.statics.transition = async function (jobId, nextStatus) {
+JobSchema.statics.transition = async function (jobId, nextStatus, extraFields = {}) {
 
     if (!STATUS_OPTION.includes(nextStatus)){
         throw new Error('invalid status option');
@@ -30,7 +30,7 @@ JobSchema.statics.transition = async function (jobId, nextStatus) {
 
     const updated_job = await this.updateOne(
         {_id: jobId, status: {$in: FROM_TRANSITIONS[nextStatus]}},
-        {$set: {status: nextStatus}});
+        {$set: {...extraFields, status: nextStatus}});
 
     const count = updated_job.matchedCount;
 
