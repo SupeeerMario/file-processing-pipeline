@@ -25,9 +25,13 @@ async function main() {
     while(running){
         const job = await queue.consume()
         if(!job){
-
-            continue
-
+            
+            const reaped = await queue.reap()
+            if(reaped){
+                
+                await processJob(reaped, recovered)
+            }
+                
         }else{
 
             await processJob(job)
