@@ -8,6 +8,7 @@ let running = true;
 let recovered = true; // to prevent double claiming a row
 const { parse } = require('csv-parse');
 const contentSchema = require("./models/zod");
+const mongoose = require('mongoose');
 
 async function main() {
     await connectDB()
@@ -43,7 +44,9 @@ async function main() {
 }
 
 
-async function flushContent(rows){
+async function flushContent(rows, jobId, chunkCounter, rowsOkSoFar){
+    let ok, failed = 0;
+    const session = await mongoose.startSession()
 
     const operations = rows.map(d =>({
         updateOne: {
@@ -55,22 +58,28 @@ async function flushContent(rows){
         }
     }))
 
-    try{
         
-        const write = await Content.bulkWrite(operations, {ordered: false})
-    
-        const ok = write.upsertedCount + write.matchedCount
-        const failed = 0
-    
-        return {ok: ok, failed: failed}  
+    try{
+        await session.withTransaction(async () => {
+
+            const write = await Content.bulkWrite(operations, {ordered: false, session})
+            ok = write.upsertedCount + write.matchedCount
+            failed = 0
+            await Job.updateOne({_id: jobId}, {$set: {lastCommittedChunk: chunkCounter, rowsOk: rowsOkSoFar + ok}}, {session})
+            
+        })
+
     }catch(err){
 
-        const ok = err.result.upsertedCount + err.result.matchedCount
-        const failed = err.writeErrors.length
+        ok = err.result.upsertedCount + err.result.matchedCount
+        failed = err.writeErrors.length
         
-        return {ok: ok, failed: failed}  
         
-    }
+    }finally{session.endSession()}
+        
+    return {ok: ok, failed: failed}  
+
+    
 }
 
 async function flushRowErrors(jobId, result_fail){
@@ -97,9 +106,9 @@ async function processJob(job, recovered = false){
     let result_pass = [];
     let result_fail = [];
 
-    let rowsOk = 0;
-    let rowsFailed = 0;
-    let totalRows = 0;
+ 
+
+    let chunkCounter = 0;
 
     if(!recovered){
 
@@ -117,6 +126,12 @@ async function processJob(job, recovered = false){
     }
 
     const doc = await Job.findById(job.jobId);
+
+
+    let rowsOk = doc.rowsOk;
+    let rowsFailed = doc.rowsFailed;
+    let totalRows = 0;
+    
     const s = await storage.get(doc.storageKey);
 
     const parser = parse({columns: true, info: true, skip_records_with_error: true})
@@ -143,11 +158,20 @@ async function processJob(job, recovered = false){
         if(result_pass.length === 1000){
             console.log(`result_pass: ${result_pass.length}`)
 
-            
-            const flushedContent = await flushContent(result_pass)
-            rowsOk += flushedContent.ok
+            chunkCounter += 1
 
-            result_pass = []
+            if(chunkCounter <= doc.lastCommittedChunk){
+
+                result_pass = []
+
+            }else{
+
+                const flushedContent = await flushContent(result_pass, job.jobId, chunkCounter, rowsOk)
+                rowsOk += flushedContent.ok
+                result_pass = []
+
+            }
+
             
         }
         
@@ -159,6 +183,7 @@ async function processJob(job, recovered = false){
             rowsFailed += result_fail.length
 
             result_fail = []
+
         }
 
         
@@ -174,11 +199,20 @@ async function processJob(job, recovered = false){
     if(result_pass.length > 0){
         console.log(`result_pass: ${result_pass.length}`)
 
-        const flushedContent = await flushContent(result_pass)
-        
-        rowsOk += flushedContent.ok
+        chunkCounter += 1
 
-        result_pass = []
+        if(chunkCounter <= doc.lastCommittedChunk){
+
+            result_pass = []
+
+        }else{
+
+            const flushedContent = await flushContent(result_pass, job.jobId, chunkCounter, rowsOk)
+            rowsOk += flushedContent.ok
+            result_pass = []
+
+        }
+
     }
     
     if(result_fail.length > 0){
@@ -189,6 +223,7 @@ async function processJob(job, recovered = false){
         rowsFailed += result_fail.length
 
         result_fail = []
+
     }
 
     await Job.transition(job.jobId, 'done', {rowsOk, rowsFailed, totalRows})
