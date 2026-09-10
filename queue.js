@@ -54,7 +54,7 @@ async function consume(from = '>'){
     const entries = result[0][1];
     
     if(entries.length === 0){
-        console.log('No entries to delete');
+        console.log('No pending messages for this consumer');
         return
     }
 
@@ -72,4 +72,25 @@ async function ack(entryId){
     return res
 }
 
-module.exports = {ensuregroup, publish, consume, ack}
+
+async function reap(){
+
+    const reply = await redis.xautoclaim(stream, group, process.env.CONSUMER_NAME, 200000, '0', 'COUNT', 1);
+
+    
+    const [, entries] = reply
+
+    if(entries.length === 0){
+        console.log('No stale messages to claim')
+        return
+    }
+
+    const entryId = entries[0][0];
+    const job = entries[0][1];
+    const jobId = job[1]
+
+    return {entryId, jobId}
+}
+
+
+module.exports = {ensuregroup, publish, consume, ack, reap}
