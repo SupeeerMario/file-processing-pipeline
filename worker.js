@@ -46,7 +46,7 @@ async function main() {
 
 async function flushContent(rows, jobId, chunkCounter, rowsOkSoFar){
     let ok, failed = 0;
-    const session = await mongoose.startSession()
+
 
     const operations = rows.map(d =>({
         updateOne: {
@@ -59,27 +59,31 @@ async function flushContent(rows, jobId, chunkCounter, rowsOkSoFar){
     }))
 
         
+    const session = await mongoose.startSession()
+
+
+
+        
     try{
         await session.withTransaction(async () => {
-
+        
             const write = await Content.bulkWrite(operations, {ordered: false, session})
             ok = write.upsertedCount + write.matchedCount
             failed = 0
             await Job.updateOne({_id: jobId}, {$set: {lastCommittedChunk: chunkCounter, rowsOk: rowsOkSoFar + ok}}, {session})
             
         })
-
+            
+        return {ok: ok, failed: failed}  
+        
     }catch(err){
-
-        ok = err.result.upsertedCount + err.result.matchedCount
-        failed = err.writeErrors.length
+            
+        console.error({error: err})
+        throw err
         
-        
-    }finally{session.endSession()}
-        
-    return {ok: ok, failed: failed}  
-
     
+    }finally{session.endSession()}
+            
 }
 
 async function flushRowErrors(jobId, result_fail){
