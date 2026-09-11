@@ -84,17 +84,28 @@ async function flushContent(rows, jobId, chunkCounter, rowsOkSoFar){
 
 async function flushRowErrors(jobId, result_fail){
     const docs = result_fail.map(e => ({ ...e, importId: jobId}))
+    
+    const operations = docs.map(d =>({
+        updateOne: {
+            filter: {importId: d.importId, row: d.row},
+            update: {
+                $set: d
+            },
+            upsert: true
+        }
+    }))
+    
     try{
     
-        const inserted = await RowError.insertMany(docs, {ordered: false})
+        const inserted = await RowError.bulkWrite(operations, {ordered: false})
 
-        const ok = inserted.length
-        const failed = docs.length - inserted.length
+        const ok = inserted.upsertedCount + inserted.matchedCount
+        const failed = 0
 
         return {ok: ok, failed: failed}
     }catch(err){
         
-        const ok = err.result.insertedCount
+        const ok = err.result.upsertedCount + err.result.matchedCount
         const failed = err.writeErrors.length
         return {ok: ok, failed: failed}
     }
