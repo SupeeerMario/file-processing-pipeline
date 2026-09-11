@@ -15,7 +15,7 @@ if (!Number.isInteger(rows) || rows < 1 || !outPath) {
 }
  
 
-const HEADER = 'customer_id,name,email,country\n';
+const HEADER = 'name,email,country\n';
 const COUNTRIES = ['US', 'CA', 'EG', 'GE', 'FR', 'JP'];
 
 
@@ -23,16 +23,12 @@ const COUNTRIES = ['US', 'CA', 'EG', 'GE', 'FR', 'JP'];
 const DEFECTS = {
     7: 'comma',
     23: 'email',
-    44: 'date',
-    71: 'duplicate_id',
     35: 'missing_name',
-    62: 'missing_id'
 };
 
 
 
 function buildRow(i) {
-    let customer_id = i;
     let name = `User ${i}`;
     let email = `user${i}@example.com`;
     let country = COUNTRIES[i % COUNTRIES.length];
@@ -48,19 +44,13 @@ function buildRow(i) {
             case 'date':
                 date = '2024-13-45'; 
                 break;
-            case 'duplicate_id':
-                customer_id = i - 1; 
-                break;
             case 'missing_name':
                 name = '';
-                break;
-            case 'missing_id':
-                customer_id = '';
                 break;
       }
     }
  
-  return [customer_id, name, email, country].join(',') + '\n';
+  return [name, email, country].join(',') + '\n';
 }
 
 

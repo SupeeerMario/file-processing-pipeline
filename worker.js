@@ -50,7 +50,7 @@ async function flushContent(rows, jobId, chunkCounter, rowsOkSoFar){
 
     const operations = rows.map(d =>({
         updateOne: {
-            filter: {customer_id: d.customer_id},
+            filter: {importId: d.importId, row: d.row},
             update: {
                 $set: d
             },
@@ -200,7 +200,7 @@ async function processJob(job, recovered = false){
         
         if(result.success){
 
-            result_pass.push(result.data)
+            result_pass.push({ ... result.data, importId: job.jobId, row: row.info.lines})
         }else{
             console.log(result.error.issues)
             result_fail.push({importId: job.jobId, row: row.info.lines, reason: result.error.issues.map(i => `${i.path}: ${i.message}`).join('; '), raw: row.record})
