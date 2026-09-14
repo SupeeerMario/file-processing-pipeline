@@ -18,7 +18,7 @@ async function main() {
     const pending = await queue.consume('0');
     if(pending){
 
-        await processJob(pending, recovered)
+        await runJob(pending, recovered)
         console.log(`deleting pending pel: ${pending.entryId}`)
     }
 
@@ -29,18 +29,45 @@ async function main() {
             
             const reaped = await queue.reap()
             if(reaped){
-                
-                await processJob(reaped, recovered)
+                await runJob(reaped, recovered)
             }
                 
         }else{
-
-            await processJob(job)
+            await runJob(job)
         }
 
     }
 
 
+}
+
+async function runJob(job, recovered){
+    try{
+
+        await processJob(job, recovered)
+    }catch(err){
+        const action = classify(err)
+        console.log(`job: ${job.jobId}, caused error: ${action}`)
+    }
+}
+
+const TRANSIENT_NAMES = ['TimeoutError', 'NetworkingError', 'MongoNetworkError','MongoServerSelectionError', 'MongoNotConnectedError'];
+const TRANSIENT_CODES = ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE'];
+const PERMANENT_NAMES = ['NoSuchKey', 'NoSuchBucket', 'AccessDenied', 'InvalidAccessKeyId', 'SignatureDoesNotMatch', 'ValidationError', 'CastError', 'TypeError', 'ReferenceError'];
+
+function classify(error){
+    if(typeof error.hasErrorLabel === 'function' && (error.hasErrorLabel('TransientTransactionError') || error.hasErrorLabel('UnknownTransactionCommitResult'))){
+        return 'transient'
+    }else if(TRANSIENT_NAMES.includes(error.name)){
+        return 'transient'
+    }else if(TRANSIENT_CODES.includes(error.code)){
+        return 'transient'
+    }else if(PERMANENT_NAMES.includes(error.name)){
+        return 'permanent'
+    }else{
+        console.log(`error_name: ${error.name}, and error_code: ${error.code}`)
+        return 'transient'
+    }
 }
 
 
