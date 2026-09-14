@@ -41,15 +41,34 @@ async function main() {
 
 }
 
+
 async function runJob(job, recovered){
     try{
 
         await processJob(job, recovered)
     }catch(err){
+
         const action = classify(err)
+            if(action === "permanent"){
+                
+                await Job.transition(job.jobId, 'dead_lettered', { error: err.message })
+                await queue.deadLetter(job.entryId, job.jobId, `error name : ${err.name}, error desc: ${err.message}`)
+
+            }else{
+
+                const n = await queue.deliveryCount(job.entryId) 
+                if (n >= 5){
+                    
+                    await Job.transition(job.jobId, 'dead_lettered', { error: err.message })
+                    await queue.deadLetter(job.entryId, job.jobId, `error name : ${err.name}, error desc: ${err.message}`)
+                }
+            }
+
         console.log(`job: ${job.jobId}, caused error: ${action}`)
     }
 }
+
+
 
 const TRANSIENT_NAMES = ['TimeoutError', 'NetworkingError', 'MongoNetworkError','MongoServerSelectionError', 'MongoNotConnectedError'];
 const TRANSIENT_CODES = ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE'];
