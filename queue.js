@@ -8,6 +8,7 @@ const redis = new Redis({
 
 const stream = 'CoolStreamName';
 const group =  'CoolGroupName';
+const DEAD_STREAM = 'CoolDeadStreamName'
 
 async function ensuregroup(id = '$') {
     try{
@@ -93,4 +94,21 @@ async function reap(){
 }
 
 
-module.exports = {ensuregroup, publish, consume, ack, reap}
+async function deliveryCount(entryId){
+    const rows = await redis.xpending(stream, group, entryId, entryId ,1)
+    
+    if(rows.length === 0){
+        console.log('No row to retry')
+        return 0
+    }
+    const row = Number(rows[0][3])
+
+    return row
+}
+
+async function deadLetter(entryId, jobId, reason){
+    await redis.xadd(DEAD_STREAM, '*', 'jobId', jobId, 'reason', reason)
+    await redis.xack(stream, group, entryId)
+}
+
+module.exports = {ensuregroup, publish, consume, ack, reap, deliveryCount, deadLetter}
