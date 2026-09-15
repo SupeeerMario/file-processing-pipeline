@@ -10,27 +10,27 @@ const FROM_TRANSITIONS = {
 }
 
 const JobSchema = new mongoose.Schema({
-    filename: {type: String, required: true},
-    storageKey: {type: String, required: true},
-    status: {type: String, enum: STATUS_OPTION, default: 'pending'},
-    totalRows: {type: Number, default: 0},
-    rowsOk: {type: Number, default: 0},
-    rowsFailed: {type: Number, default: 0},
-    lastCommittedChunk: {type: Number, default: 0},
-    attempts: {type: Number, default: 0},
-    error: {type: String},
-}, {timestamps: true});
+    filename: { type: String, required: true },
+    storageKey: { type: String, required: true },
+    status: { type: String, enum: STATUS_OPTION, default: 'pending' },
+    totalRows: { type: Number, default: 0 },
+    rowsOk: { type: Number, default: 0 },
+    rowsFailed: { type: Number, default: 0 },
+    lastCommittedChunk: { type: Number, default: 0 },
+    attempts: { type: Number, default: 0 },
+    error: { type: String },
+}, { timestamps: true });
 
 
 JobSchema.statics.transition = async function (jobId, nextStatus, extraFields = {}) {
 
-    if (!STATUS_OPTION.includes(nextStatus)){
+    if (!STATUS_OPTION.includes(nextStatus)) {
         throw new Error('invalid status option');
     }
 
     const updated_job = await this.updateOne(
-        {_id: jobId, status: {$in: FROM_TRANSITIONS[nextStatus]}},
-        {$set: {...extraFields, status: nextStatus}});
+        { _id: jobId, status: { $in: FROM_TRANSITIONS[nextStatus] } },
+        { $set: { ...extraFields, status: nextStatus } });
 
     const count = updated_job.matchedCount;
 
@@ -39,13 +39,13 @@ JobSchema.statics.transition = async function (jobId, nextStatus, extraFields = 
 };
 
 
-JobSchema.statics.processing = async function(jobId){
+JobSchema.statics.processing = async function (jobId) {
     const updated_job = await this.updateOne(
-        {_id: jobId, status: { $in: ['pending', 'processing']}},
-        {$set: {status: 'processing'}}
+        { _id: jobId, status: { $in: ['pending', 'processing'] } },
+        { $set: { status: 'processing' } }
     )
     const count = updated_job.matchedCount
-    
+
     return count
 }
 
