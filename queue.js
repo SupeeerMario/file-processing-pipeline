@@ -7,25 +7,25 @@ const redis = new Redis({
 });
 
 const stream = 'CoolStreamName';
-const group =  'CoolGroupName';
+const group = 'CoolGroupName';
 const DEAD_STREAM = 'CoolDeadStreamName'
 
 async function ensuregroup(id = '$') {
-    try{
+    try {
         await redis.xgroup('CREATE', stream, group, id, 'MKSTREAM');
         console.log(`Consumer group ${group} created`);
-    } catch(err){
-        if(err.message.includes('BUSYGROUP')){
+    } catch (err) {
+        if (err.message.includes('BUSYGROUP')) {
             console.log(`Consumer group ${group} already exists`);
-        }else{
+        } else {
             throw err;
         }
-    } 
+    }
 
 
 }
 
-async function publish(jobId){
+async function publish(jobId) {
 
     const messegeId = await redis.xadd(
         stream,
@@ -35,26 +35,26 @@ async function publish(jobId){
         'jobId',
         jobId
     );
-    
+
     console.log(`Published job ${jobId} with messege id ${messegeId}`)
 }
 
 
 
-async function consume(from = '>'){
-    
+async function consume(from = '>') {
+
     const result = await redis.xreadgroup('GROUP', group, process.env.CONSUMER_NAME, 'COUNT', 1, 'BLOCK', 5000, 'STREAMS', stream, from)
     console.log(JSON.stringify(result))
 
-    if(result === null){
+    if (result === null) {
         console.log('No new work')
         return
     }
 
 
     const entries = result[0][1];
-    
-    if(entries.length === 0){
+
+    if (entries.length === 0) {
         console.log('No pending messages for this consumer');
         return
     }
@@ -63,25 +63,25 @@ async function consume(from = '>'){
     const job = entries[0][1];
     const jobId = job[1]
 
-    return {entryId, jobId}
+    return { entryId, jobId }
 }
 
 
-async function ack(entryId){
+async function ack(entryId) {
     const res = await redis.xack(stream, group, entryId);
     console.log(res)
     return res
 }
 
 
-async function reap(){
+async function reap() {
 
     const reply = await redis.xautoclaim(stream, group, process.env.CONSUMER_NAME, 200000, '0', 'COUNT', 1);
 
-    
+
     const [, entries] = reply
 
-    if(entries.length === 0){
+    if (entries.length === 0) {
         console.log('No stale messages to claim')
         return
     }
@@ -90,14 +90,14 @@ async function reap(){
     const job = entries[0][1];
     const jobId = job[1]
 
-    return {entryId, jobId}
+    return { entryId, jobId }
 }
 
 
-async function deliveryCount(entryId){
-    const rows = await redis.xpending(stream, group, entryId, entryId ,1)
-    
-    if(rows.length === 0){
+async function deliveryCount(entryId) {
+    const rows = await redis.xpending(stream, group, entryId, entryId, 1)
+
+    if (rows.length === 0) {
         console.log('No row to retry')
         return 0
     }
@@ -106,14 +106,14 @@ async function deliveryCount(entryId){
     return row
 }
 
-async function deadLetter(entryId, jobId, reason){
+async function deadLetter(entryId, jobId, reason) {
     await redis.xadd(DEAD_STREAM, '*', 'jobId', jobId, 'reason', reason)
     await redis.xack(stream, group, entryId)
 }
 
 
-async function close(){
+async function close() {
     await redis.quit()
 }
 
-module.exports = {ensuregroup, publish, consume, ack, reap, deliveryCount, deadLetter, close}
+module.exports = { ensuregroup, publish, consume, ack, reap, deliveryCount, deadLetter, close }
