@@ -111,4 +111,9 @@ async function deadLetter(entryId, jobId, reason){
     await redis.xack(stream, group, entryId)
 }
 
-module.exports = {ensuregroup, publish, consume, ack, reap, deliveryCount, deadLetter}
+
+async function close(){
+    await redis.quit()
+}
+
+module.exports = {ensuregroup, publish, consume, ack, reap, deliveryCount, deadLetter, close}

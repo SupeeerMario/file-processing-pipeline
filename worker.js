@@ -4,11 +4,15 @@ const Job = require("./models/job");
 const Content = require("./models/content");
 const RowError = require("./models/error");
 const storage = require("./storage");
+
 let running = true;
+process.on('SIGTERM', () => { running = false })
+
 let recovered = true; // to prevent double claiming a row
 const { parse } = require('csv-parse');
 const contentSchema = require("./models/zod");
 const mongoose = require('mongoose');
+
 
 async function main() {
     await connectDB()
@@ -37,6 +41,10 @@ async function main() {
         }
 
     }
+
+    await queue.close()
+    await mongoose.disconnect()
+    process.exit(0)
 
 
 }
@@ -209,6 +217,12 @@ async function processJob(job, recovered = false){
 
 
     for await (const row of parser){ 
+        
+        if(!running) {
+        console.log(`SIGTERM: releasing job ${job.jobId} at chunk ${chunkCounter}, row ${totalRows} — not acked`)           
+        return
+        }
+        
         totalRows++
         if(totalRows % 10000 === 0) console.log(totalRows, process.memoryUsage().rss)
         
