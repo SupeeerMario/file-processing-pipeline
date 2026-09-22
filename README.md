@@ -72,8 +72,8 @@ XACK        ← last, so a crash in between can always be redelivered
 Requires Docker and Docker Compose.
 
 ```bash
-git clone git@github.com:SupeeerMario/file-processing-pipeline.git
-cd file-processing-pipeline
+git clone git@github.com:SupeeerMario/bulk-data-import-pipeline.git
+cd bulk-data-import-pipeline
 # create a .env at the repo root — keys are listed under Configuration
 openssl rand -base64 756 > mongo-keyfile && chmod 400 mongo-keyfile && sudo chown 999:999 mongo-keyfile
 docker compose up -d --build
